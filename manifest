@@ -1,0 +1,12 @@
+title=GeoTag Screensaver
+subtitle=mike wuz here
+major_version=1
+minor_version=0
+build_version=1
+ui_resolutions=fhd
+screensaver_title=GeoTag Screensaver
+screensaver_private=0
+#bs_libs_required=roku_ads
+
+' Entry point
+screensaver_main=RunScreenSaver
