@@ -1,30 +1,53 @@
 sub RunScreenSaver()
-    screen = CreateObject("roScreen")
-    port = CreateObject("roMessagePort")
-    screen.SetMessagePort(port)
-    screen.Clear(&hddfd00) ' Black background
     print "getting ready"
+    port = CreateObject("roMessagePort")
+    ' screen = CreateObject("roScreen")
+    ' screen.SetMessagePort(port)
+    ' screen.Clear(&hddfd00) ' Black background
 
-    imageUrl = "https://gratisography.com/wp-content/uploads/2025/02/gratisography-when-pigs-fly-800x525.jpg" ' Replace with your image URL
-   bitmap = loadremoteimage(imageUrl)
-    print "got bitmap "
-    if bitmap <> invalid then
-        screen.DrawObject(100, 100, bitmap)
-    else 
-        print "bitmap not valid"
-    end if
-    text = "Hello, Roku Screensaver!" ' Customize this text
-    DrawText(screen, text, 100, 400) ' Adjust position as needed
-    print "drawed text"
-    screen.SwapBuffers()
-    print "swapped buffers"
+    images = RetrieveAndIterateTextFile("http://192.168.1.245:8888/index.txt")
+
     while true
-        msg = wait(500, port)
+        image_name=GetRandomElementFromArray(images)
+        imageUrl = "http://192.168.1.245:8888/" + image_name ' Replace with your image URL
+        screen = loadremoteimage(imageUrl, port, image_name)
+        ' print "got bitmap "
+        ' if bitmap <> invalid then
+        '     screen.DrawObject(0, 0, GetScaledImage(bitmap, 1920, 1080))
+        ' else 
+        '     print "bitmap not valid"
+        ' end if
+        DrawCenteredBottomText(screen, getImageMetadata("http://192.168.1.245:8888/." + image_name ))
+        print "drawed text"
+        screen.SwapBuffers()
+        'screen.finish()
+        print "swapped buffers"
+        msg = wait(5000, port)
+        screen.swapBuffers()
     end while
     print "fine"
 end sub
 
-function loadremoteimage(url as String) as Object
+function GetRandomElementFromArray(arr as Object) as Dynamic
+    if arr <> invalid and arr.Count() > 0 then
+        randomIndex = Rnd(arr.Count())
+        return arr[randomIndex]
+    end if
+    return invalid
+end function
+
+sub DrawCenteredBottomText(screen as Object, text as String)
+    font = CreateObject("roFontRegistry").GetDefaultFont()
+    width = font.GetOneLineWidth(text,1920)
+    height = font.GetOneLineHeight()
+    screenWidth = 1920 ' Adjust for different resolutions
+    screenHeight = 1080
+    x = (screenWidth - width) / 2
+    y = screenHeight - height - 50 ' Position above the bottom edge
+    screen.DrawText(text, x, y, &hFFFFFF, font)
+end sub
+
+function loadremoteimage(url as String, port as Object, filename as String) as Object
     print "load image called " + url
     http = CreateObject("roUrlTransfer")
     http.SetUrl(url)
@@ -33,10 +56,34 @@ function loadremoteimage(url as String) as Object
     http.InitClientCertificates()
     http.EnableFreshConnection(true)
 
-    http.GetToFile("tmp:/image")
-    print "fool"
+    result = http.GetToFile("cachefs:/" + filename)
+    print "fool";
+    print result;
 
-    return CreateObject("roBitmap", "tmp:/image")
+
+    screen = CreateObject("roScreen", true)
+    screen.SetMessagePort(port)
+ '   screen.Clear(&hddfd00) ' Black background
+    screen.SwapBuffers()
+    bitmap = CreateObject("roBitmap", "cachefs:/" + filename)
+
+    ' print "bitmap:"
+    ' print bitmap
+    ' print
+
+    ' fs = CreateObject("roFileSystem")
+    ' print fs.stat("cachefs:/" + filename)
+    ' print
+    
+    if bitmap <> invalid then
+        screen.DrawObject(0, 0, GetScaledImage(bitmap, 1920, 1080))
+    else 
+        print "bitmap not valid here : " + filename
+        print CreateObject("roBitmap", "cachefs:/" + filename)
+    end if
+
+
+    return screen
     
     ' response = http.GetToFile("pkg:/image")
     ' print "ok"
@@ -54,6 +101,31 @@ sub DrawText(screen as Object, text as String, x as Integer, y as Integer)
     screen.DrawText(text, x, y, &hFFFFFF, font) ' White text color
 end sub
 
+function GetScaledImage(bitmap, w, h)
+	if bitmap <> invalid
+		scaledBitmap = CreateObject("roBitmap", {width: w, height: h, AlphaEnable: true})
+		if scaledBitmap <> invalid
+			if scaledBitmap.DrawScaledObject(0, 0, w/bitmap.GetWidth(), h/bitmap.GetHeight(), bitmap) = true
+				return scaledBitmap
+			end if
+		end if
+	end if
+    print "could not scale, image was inbalid!"
+	return invalid
+end function
+
+function getImageMetadata(url as String)
+    http = CreateObject("roUrlTransfer")
+    http.SetUrl(url)
+    http.SetCertificatesFile("common:/certs/ca-bundle.crt")
+    http.InitClientCertificates()
+    
+    response = http.GetToString()
+    if response <> invalid then
+        return response
+    end if
+end function
+
 function RetrieveAndIterateTextFile(url as String)
     http = CreateObject("roUrlTransfer")
     http.SetUrl(url)
@@ -63,9 +135,10 @@ function RetrieveAndIterateTextFile(url as String)
     response = http.GetToString()
     if response <> invalid then
         lines = response.Split(Chr(10)) ' Split by newline
-        for each line in lines
-            print line
-        next
+        ' for each line in lines
+        '     print line
+        ' next
+        return lines
     end if
 end function
 
